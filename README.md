@@ -58,6 +58,8 @@ python dlq_consumer.py
 - Captures all permanently failed messages.
 - Provides reason, timestamp, and failed record details.
 
+### Output for order processing system
+![Kafka Architecture]()
 
 
 
