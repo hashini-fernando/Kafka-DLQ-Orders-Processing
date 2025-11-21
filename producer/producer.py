@@ -1,97 +1,76 @@
-from confluent_kafka import Producer
-from confluent_kafka.serialization import SerializationContext, MessageField
-from confluent_kafka.schema_registry import SchemaRegistryClient
-from confluent_kafka.schema_registry.avro import AvroSerializer
-import random
-import time
 import json
-
-# Configuration
-KAFKA_BROKER = 'localhost:9092'
-SCHEMA_REGISTRY_URL = 'http://localhost:8081'
-TOPIC = 'orders'
+import io
+import time
+import random
+from confluent_kafka import Producer
+from fastavro import schemaless_writer
 
 # Load Avro schema
-with open('C:/Semester8/sem-8/big_data/schemas/order.avsc', 'r') as f:
-    schema_str = f.read()
+with open("C:/Semester8/sem-8/big_data/schemas/order.avsc", 'r') as f:
+    schema = json.load(f)
 
-# Schema Registry client
-schema_registry_conf = {'url': SCHEMA_REGISTRY_URL}
-schema_registry_client = SchemaRegistryClient(schema_registry_conf)
-
-# Avro Serializer
-avro_serializer = AvroSerializer(
-    schema_registry_client,
-    schema_str,
-    lambda order, ctx: order
-)
-
-# Kafka Producer configuration
 producer_conf = {
-    'bootstrap.servers': KAFKA_BROKER,
-    'client.id': 'order-producer'
+    "bootstrap.servers": "localhost:9092"
 }
-
 producer = Producer(producer_conf)
 
-# Product catalog
-PRODUCTS = [
-    "Laptop", "Mouse", "Keyboard", "Monitor", 
-    "Headphones", "Webcam", "Desk", "Chair"
-]
+products = ["Cinnamon Sticks Alba", "Cinnamon C5", "Cinnamon Powder"]
+order_id = 1000
+
+
+def avro_serialize(record: dict) -> bytes:
+    buffer = io.BytesIO()
+    schemaless_writer(buffer, schema, record)
+    return buffer.getvalue()
+
 
 def delivery_report(err, msg):
-    """Callback for message delivery reports"""
+    print("\n[ Delivery Report ]")
+    print("-" * 60)
     if err is not None:
-        print(f' Message delivery failed: {err}')
+        print(f"Status     : FAILED")
+        print(f"Error      : {err}")
     else:
-        print(f' Message delivered to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}')
+        print(f"Status     : SUCCESS")
+        print(f"Topic      : {msg.topic()}")
+        print(f"Partition  : {msg.partition()}")
+        print(f"Offset     : {msg.offset()}")  
+    print("-" * 60)
 
-def generate_order(order_id):
-    """Generate a random order"""
-    return {
-        'orderId': str(order_id),
-        'product': random.choice(PRODUCTS),
-        'price': round(random.uniform(10.0, 1000.0), 2)
-    }
-
-def produce_orders(num_orders=20, delay=1):
-    """Produce order messages to Kafka"""
-    print(f" Starting producer - will send {num_orders} orders\n")
-    
-    for i in range(1, num_orders + 1):
-        try:
-            order = generate_order(i)
-            
-            # Serialize and produce
-            producer.produce(
-                topic=TOPIC,
-                value=avro_serializer(
-                    order,
-                    SerializationContext(TOPIC, MessageField.VALUE)
-                ),
-                callback=delivery_report
-            )
-            
-            print(f" Produced Order #{order['orderId']}: {order['product']} - ${order['price']}")
-            
-            # Poll to handle delivery reports
-            producer.poll(0)
-            
-            time.sleep(delay)
-            
-        except Exception as e:
-            print(f" Error producing message: {e}")
-    
-    # Wait for all messages to be delivered
-    print("\n Flushing remaining messages...")
-    producer.flush()
-    print("All messages sent successfully!")
 
 if __name__ == "__main__":
+    print("Kafka Avro Producer Running (Press CTRL+C to stop)\n")
+
     try:
-        produce_orders(num_orders=20, delay=2)
+        while True:
+            order_id += 1
+            record = {
+                "orderId": str(order_id),
+                "product": random.choice(products),
+                "price": round(random.uniform(10, 500), 2)
+            }
+
+            encoded_value = avro_serialize(record)
+
+            producer.produce(
+                topic="orders",
+                value=encoded_value,
+                callback=delivery_report
+            )
+
+            print("[ Produced New Record ]")
+            print("-" * 60)
+            print(f"Order ID   : {record['orderId']}")
+            print(f"Product    : {record['product']}")
+            print(f"Price ($)  : {record['price']}")
+            print("-" * 60)
+
+            producer.poll(0)  
+            time.sleep(1)
+
     except KeyboardInterrupt:
-        print("\n  Producer interrupted by user")
+        print("\nShutting down producer ...")
+
     finally:
         producer.flush()
+        print("All messages flushed. Producer stopped.")
