@@ -24,6 +24,7 @@ This project implements a distributed Kafka-based system to produce and consume 
 ```bash
 docker-compose up -d
 ```
+![output](docker_container_status.JPG)
 ### 2. Install Python dependencies
 ```bash
 pip install -r requirements.txt
@@ -59,7 +60,7 @@ python dlq_consumer.py
 - Provides reason, timestamp, and failed record details.
 
 ### Output for order processing system
-![Kafka Architecture]()
+![output](output.JPG)
 
 
 
